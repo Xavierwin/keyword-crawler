@@ -1,6 +1,0 @@
-requests
-beautifulsoup4
-pypdf
-streamlit
-pandas
-streamlit-autorefresh

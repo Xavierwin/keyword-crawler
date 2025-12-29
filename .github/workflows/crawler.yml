@@ -1,4 +1,4 @@
-name: Keyword Crawler
+name: Node Keyword Crawler
 
 permissions:
   contents: write
@@ -15,18 +15,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-node@v4
         with:
-          python-version: "3.11"
+          node-version: 20
 
-      - run: pip install -r requirements.txt
+      - run: npm install
 
-      - run: python crawler.py
+      - run: node crawler/crawler.js
 
       - run: |
           git config user.name "crawler-bot"
           git config user.email "crawler@github.com"
-          git add keyword_search_results.csv crawl_status.json search_config.json
+          git add crawler/*.json crawler/*.csv
           git commit -m "Update crawl results" || echo "No changes"
           git pull --rebase origin main
           git push origin main
