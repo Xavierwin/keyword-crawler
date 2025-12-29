@@ -54,7 +54,7 @@ const { search_keyword } = JSON.parse(
   fs.readFileSync(CONFIG_FILE, "utf-8")
 );
 
-console.log(`🔍 Searching for keyword: "${search_keyword}"`, flush = true);
+console.log(`🔍 Searching for keyword: "${search_keyword}"`);
 
 // ================= LOAD URLS =================
 if (!fs.existsSync(INPUT_FILE)) {
