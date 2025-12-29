@@ -25,8 +25,11 @@ jobs:
         run: python crawler.py
       - name: Commit results
         run: |
-          git config user.name "crawler-bot"
-          git config user.email "crawler@github.com"
-          git add keyword_search_results.csv crawl_status.json keyword_crawler.log
-          git commit -m "Update crawl results" || echo "No changes"
-          git push
+           git config user.name "crawler-bot"
+    git config user.email "crawler@github.com"
+
+    git add keyword_search_results.csv crawl_status.json keyword_crawler.log
+    git commit -m "Update crawl results" || echo "No changes"
+
+    git pull --rebase origin main
+    git push origin main
