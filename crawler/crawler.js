@@ -1,9 +1,10 @@
 import fs from "fs";
 import axios from "axios";
-import cheerio from "cheerio";
+import * as cheerio from "cheerio";
 import pdf from "pdf-parse";
 import { createObjectCsvWriter } from "csv-writer";
 
+// ================= CONFIG =================
 const INPUT_FILE = "crawler/repo.txt";
 const CONFIG_FILE = "crawler/search_config.json";
 const STATUS_FILE = "crawler/crawl_status.json";
@@ -12,21 +13,24 @@ const OUTPUT_FILE = "crawler/keyword_search_results.csv";
 const THREADS = 5;
 const DELAY_MIN = 300;
 const DELAY_MAX = 800;
+const TIMEOUT = 20000;
 
+// ================= UTILS =================
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const randomDelay = () =>
   sleep(Math.random() * (DELAY_MAX - DELAY_MIN) + DELAY_MIN);
 
 const headers = {
-  "User-Agent": "Mozilla/5.0"
+  "User-Agent": "Mozilla/5.0 (compatible; KeywordCrawler/1.0)"
 };
 
-// 🔁 STATUS UPDATE
+// ================= STATUS =================
 function updateStatus(data) {
   let status = {};
   if (fs.existsSync(STATUS_FILE)) {
-    status = JSON.parse(fs.readFileSync(STATUS_FILE));
+    status = JSON.parse(fs.readFileSync(STATUS_FILE, "utf-8"));
   }
+
   fs.writeFileSync(
     STATUS_FILE,
     JSON.stringify(
@@ -41,21 +45,32 @@ function updateStatus(data) {
   );
 }
 
-// 🔍 LOAD KEYWORD
+// ================= LOAD KEYWORD =================
+if (!fs.existsSync(CONFIG_FILE)) {
+  throw new Error("❌ search_config.json not found");
+}
+
 const { search_keyword } = JSON.parse(
-  fs.readFileSync(CONFIG_FILE)
+  fs.readFileSync(CONFIG_FILE, "utf-8")
 );
 
-console.log(`🔍 Searching for keyword: ${search_keyword}`);
+console.log(`🔍 Searching for keyword: "${search_keyword}"`, flush = true);
 
-// 📄 LOAD URLS
-const urls = [...new Set(
-  fs.readFileSync(INPUT_FILE, "utf-8")
-    .split("\n")
-    .map(u => u.trim())
-    .filter(Boolean)
-)];
+// ================= LOAD URLS =================
+if (!fs.existsSync(INPUT_FILE)) {
+  throw new Error("❌ repo.txt not found");
+}
 
+const urls = [
+  ...new Set(
+    fs.readFileSync(INPUT_FILE, "utf-8")
+      .split("\n")
+      .map(u => u.trim())
+      .filter(Boolean)
+  )
+];
+
+// ================= INIT STATUS =================
 updateStatus({
   state: "RUNNING",
   keyword: search_keyword,
@@ -65,7 +80,7 @@ updateStatus({
   current_url: ""
 });
 
-// 🧾 CSV WRITER
+// ================= CSV =================
 const csvWriter = createObjectCsvWriter({
   path: OUTPUT_FILE,
   header: [
@@ -77,49 +92,60 @@ const csvWriter = createObjectCsvWriter({
   append: fs.existsSync(OUTPUT_FILE)
 });
 
-let processed = 0;
-let found = 0;
-
-// 🌐 FETCH & SEARCH
+// ================= CRAWL =================
 async function processUrl(url) {
   await randomDelay();
 
   try {
-    const res = await axios.get(url, { headers, timeout: 20000 });
+    const res = await axios.get(url, {
+      headers,
+      timeout: TIMEOUT,
+      responseType: "arraybuffer"
+    });
+
     let text = "";
     let type = "HTML";
 
-    if (
-      res.headers["content-type"]?.includes("pdf") ||
-      url.endsWith(".pdf")
-    ) {
+    const contentType = res.headers["content-type"] || "";
+
+    if (contentType.includes("pdf") || url.endsWith(".pdf")) {
       const data = await pdf(res.data);
-      text = data.text;
+      text = data.text || "";
       type = "PDF";
     } else {
-      const $ = cheerio.load(res.data);
+      const html = res.data.toString("utf-8");
+      const $ = cheerio.load(html);
       text = $.text();
     }
 
     if (text.includes(search_keyword)) {
+      const count = text.split(search_keyword).length - 1;
       return {
         url,
         type,
         found: "YES",
-        details: `Found ${text.split(search_keyword).length - 1} times`
+        details: `Found ${count} times`
       };
     }
 
     return { url, type, found: "NO", details: "Not found" };
-  } catch (e) {
-    return { url, type: "Error", found: "NO", details: e.message };
+  } catch (err) {
+    return {
+      url,
+      type: "Error",
+      found: "NO",
+      details: err.message
+    };
   }
 }
 
-// ⚙️ WORKER POOL
+// ================= WORKER POOL =================
 async function run() {
   const queue = [...urls];
-  const workers = new Array(THREADS).fill(null).map(async () => {
+  let processed = 0;
+  let found = 0;
+
+  const workers = Array.from({ length: THREADS }).map(async () => {
     while (queue.length) {
       const url = queue.shift();
       const result = await processUrl(url);
@@ -136,7 +162,8 @@ async function run() {
       });
 
       console.log(
-        `[${processed}/${urls.length}] ${url} | Found: ${found}`
+        `[${processed}/${urls.length}] ${url} | Found: ${found}`,
+        true
       );
     }
   });
