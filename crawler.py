@@ -15,11 +15,10 @@ from datetime import datetime
 DEFAULT_INPUT = "repo.txt"
 DEFAULT_OUTPUT = "keyword_search_results.csv"
 STATUS_FILE = "crawl_status.json"
+CONFIG_FILE = "search_config.json"
 
-SEARCH_KEYWORD = "09/2025"
 THREADS = 4
 TIMEOUT = 20
-RETRIES = 3
 
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
@@ -32,13 +31,6 @@ try:
     PDF_SUPPORT = True
 except ImportError:
     PDF_SUPPORT = False
-
-# ================= LOGGING =================
-logging.basicConfig(
-    filename="keyword_crawler.log",
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s"
-)
 
 # ================= STATUS =================
 def update_status(**kwargs):
@@ -57,9 +49,14 @@ def update_status(**kwargs):
 def get_headers():
     return {"User-Agent": random.choice(USER_AGENTS)}
 
-def check_url_for_keyword(url, keyword):
-    time.sleep(random.uniform(0.3, 0.8))  # GitHub Actions safe delay
+def load_search_keyword():
+    if not os.path.exists(CONFIG_FILE):
+        raise RuntimeError("search_config.json not found")
+    with open(CONFIG_FILE) as f:
+        return json.load(f).get("search_keyword")
 
+def check_url_for_keyword(url, keyword):
+    time.sleep(random.uniform(0.3, 0.8))
     try:
         resp = requests.get(url, headers=get_headers(), timeout=TIMEOUT)
         resp.raise_for_status()
@@ -69,7 +66,6 @@ def check_url_for_keyword(url, keyword):
         if "pdf" in content_type or url.lower().endswith(".pdf"):
             if not PDF_SUPPORT:
                 return url, False, "PDF skipped", "PDF"
-
             reader = pypdf.PdfReader(io.BytesIO(resp.content))
             text = " ".join(page.extract_text() or "" for page in reader.pages)
             page_type = "PDF"
@@ -88,23 +84,15 @@ def check_url_for_keyword(url, keyword):
 
 # ================= MAIN =================
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--input", default=DEFAULT_INPUT)
-    parser.add_argument("--limit", type=int, help="Limit number of URLs")
-    args = parser.parse_args()
+    keyword = load_search_keyword()
+    print(f"🔍 Searching for keyword: {keyword}", flush=True)
 
-    if not os.path.exists(args.input):
-        print("Input file missing", flush=True)
-        return
-
-    with open(args.input) as f:
+    with open(DEFAULT_INPUT) as f:
         urls = list(dict.fromkeys([u.strip() for u in f if u.strip()]))
-
-    if args.limit:
-        urls = urls[:args.limit]
 
     update_status(
         state="RUNNING",
+        keyword=keyword,
         total_urls=len(urls),
         processed=0,
         found=0,
@@ -123,7 +111,7 @@ def main():
 
         with ThreadPoolExecutor(max_workers=THREADS) as executor:
             futures = [
-                executor.submit(check_url_for_keyword, u, SEARCH_KEYWORD)
+                executor.submit(check_url_for_keyword, u, keyword)
                 for u in urls
             ]
 
@@ -145,14 +133,13 @@ def main():
                     current_url=url
                 )
 
-                # 🔴 CRITICAL: keeps GitHub Actions alive
                 print(
-                    f"[{processed}/{len(urls)}] URL: {url} | Found: {found}",
+                    f"[{processed}/{len(urls)}] {url} | Found: {found}",
                     flush=True
                 )
 
     update_status(state="COMPLETED")
-    print("Crawl completed", flush=True)
+    print("✅ Crawl completed", flush=True)
 
 if __name__ == "__main__":
     main()

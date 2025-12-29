@@ -7,10 +7,26 @@ from streamlit_autorefresh import st_autorefresh
 st.set_page_config(page_title="Keyword Crawl Dashboard", layout="wide")
 st_autorefresh(interval=15000, key="refresh")
 
-st.title("🔍 Live Keyword Crawling Dashboard")
-
+CONFIG_FILE = "search_config.json"
 STATUS_FILE = "crawl_status.json"
 CSV_FILE = "keyword_search_results.csv"
+
+st.title("🔍 Keyword Search Dashboard")
+
+# ===== USER INPUT =====
+st.subheader("🔑 Search Keyword")
+
+keyword = st.text_input("Enter keyword to search")
+
+if st.button("Save keyword"):
+    if keyword.strip():
+        with open(CONFIG_FILE, "w") as f:
+            json.dump({"search_keyword": keyword.strip()}, f, indent=2)
+        st.success("Keyword saved. Trigger crawler from GitHub Actions.")
+    else:
+        st.warning("Keyword cannot be empty")
+
+st.divider()
 
 # ===== STATUS =====
 if os.path.exists(STATUS_FILE):
@@ -21,8 +37,10 @@ else:
 
 state = status.get("state", "IDLE")
 
+st.subheader("🚦 Crawl Status")
+
 if state == "RUNNING":
-    st.success("🟢 Crawl in progress")
+    st.success(f"🟢 Running (Keyword: {status.get('keyword')})")
 elif state == "COMPLETED":
     st.info("✅ Crawl completed")
 else:
@@ -41,22 +59,11 @@ st.code(status.get("current_url", "—"))
 
 st.divider()
 
-# ===== RESULTS TABLE =====
-st.subheader("📄 Crawl Results")
+# ===== RESULTS =====
+st.subheader("📄 Results")
 
 if os.path.exists(CSV_FILE):
     df = pd.read_csv(CSV_FILE)
-
-    filter_opt = st.selectbox(
-        "Filter results",
-        ["All", "Found Only", "Not Found"]
-    )
-
-    if filter_opt == "Found Only":
-        df = df[df["Found Keyword"] == "YES"]
-    elif filter_opt == "Not Found":
-        df = df[df["Found Keyword"] == "NO"]
-
     st.dataframe(df, use_container_width=True)
 else:
-    st.warning("Results not available yet")
+    st.warning("No results yet")

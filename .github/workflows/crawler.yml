@@ -1,10 +1,12 @@
 name: Keyword Crawler
+
 permissions:
   contents: write
+
 on:
+  workflow_dispatch:
   schedule:
     - cron: "0 2 * * *"
-  workflow_dispatch:
 
 jobs:
   crawl:
@@ -13,21 +15,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt
+      - run: pip install -r requirements.txt
 
-      - name: Run crawler
-        run: python crawler.py
-      - name: Commit results
-        run: |
-           git config user.name "crawler-bot"
-           git config user.email "crawler@github.com"
-           git add keyword_search_results.csv crawl_status.json keyword_crawler.log
-           git commit -m "Update crawl results" || echo "No changes"
-           git pull --rebase origin main
-           git push origin main
+      - run: python crawler.py
+
+      - run: |
+          git config user.name "crawler-bot"
+          git config user.email "crawler@github.com"
+          git add keyword_search_results.csv crawl_status.json search_config.json
+          git commit -m "Update crawl results" || echo "No changes"
+          git pull --rebase origin main
+          git push origin main
