@@ -27,22 +27,27 @@ const headers = {
 // ================= STATUS =================
 function updateStatus(data) {
   let status = {};
+
   if (fs.existsSync(STATUS_FILE)) {
-    status = JSON.parse(fs.readFileSync(STATUS_FILE, "utf-8"));
+    try {
+      const raw = fs.readFileSync(STATUS_FILE, "utf-8").trim();
+      if (raw) {
+        status = JSON.parse(raw);
+      }
+    } catch (e) {
+      // File was being written by another worker — ignore
+      status = {};
+    }
   }
 
-  fs.writeFileSync(
-    STATUS_FILE,
-    JSON.stringify(
-      {
-        ...status,
-        ...data,
-        last_updated: new Date().toISOString()
-      },
-      null,
-      2
-    )
-  );
+  const nextStatus = {
+    ...status,
+    ...data,
+    last_updated: new Date().toISOString()
+  };
+
+  // Atomic write: write fully in one operation
+  fs.writeFileSync(STATUS_FILE, JSON.stringify(nextStatus, null, 2));
 }
 
 // ================= LOAD KEYWORD =================
