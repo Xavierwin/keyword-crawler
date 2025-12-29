@@ -1,5 +1,6 @@
 name: Keyword Crawler
-
+permissions:
+  contents: write
 on:
   schedule:
     - cron: "0 2 * * *"
@@ -21,8 +22,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run crawler
-        run: python crawler.py --limit 50
-
+        run: python crawler.py
       - name: Commit results
         run: |
           git config user.name "crawler-bot"
