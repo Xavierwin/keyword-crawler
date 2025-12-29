@@ -21,7 +21,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run crawler
-        run: python crawler.py
+        run: python crawler.py --limit 50
 
       - name: Commit results
         run: |

@@ -11,7 +11,7 @@ import io
 import json
 from datetime import datetime
 
-# ================== CONFIGURATION ==================
+# ================= CONFIG =================
 DEFAULT_INPUT = "repo.txt"
 DEFAULT_OUTPUT = "keyword_search_results.csv"
 STATUS_FILE = "crawl_status.json"
@@ -33,14 +33,14 @@ try:
 except ImportError:
     PDF_SUPPORT = False
 
-# ================== LOGGING ==================
+# ================= LOGGING =================
 logging.basicConfig(
     filename="keyword_crawler.log",
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
-# ================== STATUS ==================
+# ================= STATUS =================
 def update_status(**kwargs):
     status = {}
     if os.path.exists(STATUS_FILE):
@@ -53,12 +53,13 @@ def update_status(**kwargs):
     with open(STATUS_FILE, "w") as f:
         json.dump(status, f, indent=2)
 
-# ================== HELPERS ==================
+# ================= HELPERS =================
 def get_headers():
     return {"User-Agent": random.choice(USER_AGENTS)}
 
 def check_url_for_keyword(url, keyword):
-    time.sleep(random.uniform(1.5, 3.5))
+    time.sleep(random.uniform(0.3, 0.8))  # GitHub Actions safe delay
+
     try:
         resp = requests.get(url, headers=get_headers(), timeout=TIMEOUT)
         resp.raise_for_status()
@@ -71,31 +72,36 @@ def check_url_for_keyword(url, keyword):
 
             reader = pypdf.PdfReader(io.BytesIO(resp.content))
             text = " ".join(page.extract_text() or "" for page in reader.pages)
-
+            page_type = "PDF"
         else:
             soup = BeautifulSoup(resp.text, "html.parser")
             text = soup.get_text(" ")
+            page_type = "HTML"
 
         if keyword in text:
-            return url, True, f"Found {text.count(keyword)} times", "PDF" if "pdf" in content_type else "HTML"
+            return url, True, f"Found {text.count(keyword)} times", page_type
 
-        return url, False, "Not found", "PDF" if "pdf" in content_type else "HTML"
+        return url, False, "Not found", page_type
 
     except Exception as e:
         return url, False, f"Error: {e}", "Error"
 
-# ================== MAIN ==================
+# ================= MAIN =================
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", default=DEFAULT_INPUT)
+    parser.add_argument("--limit", type=int, help="Limit number of URLs")
     args = parser.parse_args()
 
     if not os.path.exists(args.input):
-        print("Input file missing")
+        print("Input file missing", flush=True)
         return
 
     with open(args.input) as f:
         urls = list(dict.fromkeys([u.strip() for u in f if u.strip()]))
+
+    if args.limit:
+        urls = urls[:args.limit]
 
     update_status(
         state="RUNNING",
@@ -116,11 +122,15 @@ def main():
         found = 0
 
         with ThreadPoolExecutor(max_workers=THREADS) as executor:
-            futures = [executor.submit(check_url_for_keyword, u, SEARCH_KEYWORD) for u in urls]
+            futures = [
+                executor.submit(check_url_for_keyword, u, SEARCH_KEYWORD)
+                for u in urls
+            ]
 
             for future in as_completed(futures):
                 url, is_found, details, ctype = future.result()
                 processed += 1
+
                 if is_found:
                     found += 1
                     writer.writerow([url, ctype, "YES", details])
@@ -135,8 +145,14 @@ def main():
                     current_url=url
                 )
 
+                # 🔴 CRITICAL: keeps GitHub Actions alive
+                print(
+                    f"[{processed}/{len(urls)}] URL: {url} | Found: {found}",
+                    flush=True
+                )
+
     update_status(state="COMPLETED")
-    print("Crawl completed")
+    print("Crawl completed", flush=True)
 
 if __name__ == "__main__":
     main()

@@ -12,16 +12,15 @@ st.title("🔍 Live Keyword Crawling Dashboard")
 STATUS_FILE = "crawl_status.json"
 CSV_FILE = "keyword_search_results.csv"
 
-# ================= STATUS =================
+# ===== STATUS =====
 if os.path.exists(STATUS_FILE):
     with open(STATUS_FILE) as f:
         status = json.load(f)
 else:
     status = {"state": "IDLE"}
 
-st.subheader("🚦 Crawl Status")
-
 state = status.get("state", "IDLE")
+
 if state == "RUNNING":
     st.success("🟢 Crawl in progress")
 elif state == "COMPLETED":
@@ -37,27 +36,27 @@ col3.metric("Matches Found", status.get("found", 0))
 progress = status.get("processed", 0) / max(status.get("total_urls", 1), 1)
 st.progress(progress)
 
-st.caption("Currently Processing:")
+st.caption("Currently processing:")
 st.code(status.get("current_url", "—"))
 
 st.divider()
 
-# ================= TABLE =================
-st.subheader("📄 Results")
+# ===== RESULTS TABLE =====
+st.subheader("📄 Crawl Results")
 
 if os.path.exists(CSV_FILE):
     df = pd.read_csv(CSV_FILE)
 
-    filter_option = st.selectbox(
-        "Filter",
+    filter_opt = st.selectbox(
+        "Filter results",
         ["All", "Found Only", "Not Found"]
     )
 
-    if filter_option == "Found Only":
+    if filter_opt == "Found Only":
         df = df[df["Found Keyword"] == "YES"]
-    elif filter_option == "Not Found":
+    elif filter_opt == "Not Found":
         df = df[df["Found Keyword"] == "NO"]
 
     st.dataframe(df, use_container_width=True)
 else:
-    st.warning("CSV file not available yet")
+    st.warning("Results not available yet")
